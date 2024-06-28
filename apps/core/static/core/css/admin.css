@@ -1,0 +1,72 @@
+#changelist-search div input[type=text]{
+    width: -webkit-fill-available;
+}
+
+#changelist-search div label, #changelist-search div input[type=submit]{
+    display: None;
+}
+
+.actions {
+    position:relative;
+    top: 5px !important;
+}
+
+.actions select {
+    margin-left: -43px !important;
+}
+
+.paginator{
+
+}
+
+.column-* {
+    white-space: nowrap !important;
+}
+
+#result_list tbody th, #result_list tbody td  {
+    white-space: nowrap !important;
+}
+
+#result_list tbody tr td{
+    vertical-align: middle;
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+}
+
+.action-checkbox {
+    vertical-align: middle;
+}
+
+.column-best_per_team, .column-best_per_match, .column-gols_per_match, .column-victories_result,
+.column-losses_result, .column-empaths_result, .column-created, .column-updated {
+    text-align:center !important;
+}
+
+.column-best_per_team, .column-best_per_match {
+    width: 80px;
+}
+
+.column-gols_per_match, .column-victories_result,
+.column-losses_result, .column-empaths_result, .column-created, .column-updated {
+    width: 70px;
+}
+
+
+.column-area{
+    text-align: left !important;
+    width: 100px;
+}
+
+.column-value{
+    text-align: center !important;
+    white-space: nowrap;
+    width: 100px;
+}
+
+/* Entities */
+.column-owner_with_phone, .column-route, .column-bookings, .column-teams, .column-matches, .column-best_player
+.column-time, .column-total_bookings, .column-members_and_type, .column-time, .column-status{
+    text-align: center !important;
+    white-space: nowrap;
+    width: 100px;
+}
