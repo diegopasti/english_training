@@ -1,6 +1,8 @@
+import multiprocessing
 import os
 import re
 import json
+import timeit
 
 from urllib.request import Request, urlopen, urlretrieve
 from bs4 import BeautifulSoup
@@ -12,7 +14,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
 from apps.core.utils.handlers.audio import merge_audios, split_audio
-from apps.core.utils.handlers.files import delete_files
+from apps.core.utils.handlers.files import delete_directory
 from main.settings import MEDIA_URL
 
 FAKE_AGENT = (
@@ -37,6 +39,11 @@ class NoticesImporter:
     def __init__(self, driver):
         self.driver = driver
         self.content = None
+
+    def __initialize_data(self):
+        """
+        Define and initialize data object
+        """
 
         self.title = ""
         self.level = None
@@ -86,6 +93,10 @@ class NoticesImporter:
 
         self.text = self.content.find("div", id="nContent")
         self.publish_date = self.text.find("p").text
+
+        self.notice_directory = os.path.join(MEDIA_URL, "notices", self.title.lower().replace(" ", "_"))
+        if not os.path.exists(self.notice_directory):
+            os.makedirs(self.notice_directory)
 
     def __get_paragraphs(self, text) -> list:
         """
@@ -161,30 +172,24 @@ class NoticesImporter:
         temporary_files = []
         count = 1
 
+        temp_folder = os.path.join(self.notice_directory, "temp")
+        if not os.path.exists(temp_folder):
+            os.makedirs(temp_folder)
+
         for element in playlist:
             if "https://cf-hls-media.sndcdn.com/media/" in element:
-                filename = os.path.join(MEDIA_URL, "temp", f"{count}.mp3")
+                filename = os.path.join(temp_folder, f"{count}.mp3")
                 urlretrieve(element, filename)
                 tracks.append(element)
                 temporary_files.append(filename)
                 count += 1
 
-        publish_date_parts = self.publish_date[:10].split("-")
-        date = f"{publish_date_parts[2]}{publish_date_parts[1]}{publish_date_parts[0]}"
-        folder = os.path.join(MEDIA_URL, "notices", date)
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-
-        folder = os.path.join(folder, self.title.lower().replace(" ","_"))
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-
-        folder = os.path.join(folder, "tracks")
+        folder = os.path.join(self.notice_directory, "tracks")
         if not os.path.exists(folder):
             os.makedirs(folder)
 
         self.audio = merge_audios(temporary_files, folder)
-        delete_files(temporary_files)
+        delete_directory(temp_folder)
 
         self.phrases_audio = split_audio(self.audio, folder)
         return tracks
@@ -278,6 +283,7 @@ class NoticesImporter:
             :return: News data and audio for import
             """
 
+        self.__initialize_data()
         self.content = self.__get_content_from_notice(url)
         self.__get_notice_metadata()
         self.paragraphs = self.__get_paragraphs(self.text)
@@ -286,8 +292,15 @@ class NoticesImporter:
         self.__get_audio(self.audio_url, self.driver)
 
         self.elements = self.__get_elements()
+        response = self.__format_notice()
 
-        return self.__format_notice()
+        metadata = os.path.join(self.notice_directory, "metadata.json")
+
+        with open(metadata, 'w') as fp:
+            json.dump(response, fp)
+
+        print(f"English Training > '{self.title}' importado com sucesso!")
+        return response
 
 
 def import_notices(notices: list, without_interface: bool = True):
@@ -300,6 +313,7 @@ def import_notices(notices: list, without_interface: bool = True):
     :return:
     """
 
+    print("English Training > Import process started")
     options = webdriver.ChromeOptions()
 
     # Chrome will start in Headless mode
@@ -311,6 +325,7 @@ def import_notices(notices: list, without_interface: bool = True):
     driver = webdriver.Chrome(options=options)
     importer = NoticesImporter(driver)
     response = []
+
     for url in notices:
         notice = importer.import_notice(url)
         response.append(notice)
@@ -319,15 +334,72 @@ def import_notices(notices: list, without_interface: bool = True):
     return response
 
 
+def chunks(lst, n):
+    """ Yield successive n-sized chunks from lst. """
+    parts = []
+    for i in range(0, len(lst), n):
+        x = lst[i:i + n]
+        parts.append(x)
+
+    return parts
+
+
+def prepare_processes(notices):
+    """
+    Prepare multiples process to download notices
+
+    :param notices: List containing notices url that will be downloaded
+    :return:
+    """
+
+    size = len(notices)
+    max_thread = 10
+    max_threads = 1 if size < max_thread else max_thread
+    notices_parts = chunks(notices, max_threads)
+    processes = []
+
+    for item in notices_parts:
+        p = multiprocessing.Process(target=import_notices, args=(item,))
+        processes.append(p)
+
+    return processes
+
+
+def multithread_importer(notices, enable=True):
+    response = []
+    if enable:
+        processes = prepare_processes(notices)
+
+        for process in processes:
+            process.start()
+
+        for process in processes:
+            process.join()
+    else:
+        response = import_notices(notices)
+
+    return response
+
+
 if __name__ == "__main__":
+    start = timeit.default_timer()
     notices = [
         "https://www.newsinlevels.com/products/real-madrid-wins-champions-league-title-level-3",
-        # "https://www.newsinlevels.com/products/europes-waste-goes-to-other-countries-level-1/",
-        # "https://www.newsinlevels.com/products/mbappe-signs-a-deal-with-real-madrid-level-1/",
-        # "https://www.newsinlevels.com/products/british-tv-presenter-is-missing-level-1/",
+        "https://www.newsinlevels.com/products/europes-waste-goes-to-other-countries-level-1/",
+        "https://www.newsinlevels.com/products/mbappe-signs-a-deal-with-real-madrid-level-1/",
+        "https://www.newsinlevels.com/products/british-tv-presenter-is-missing-level-1/",
+        "https://www.newsinlevels.com/products/the-future-of-a-steak-level-1/",
+        "https://www.newsinlevels.com/products/baby-boards-a-bus-alone-level-1/"
+        "https://www.newsinlevels.com/products/new-delhi-airport-roof-collapse-level-1/"
+        "https://www.newsinlevels.com/products/kenya-and-plastics-level-1/"
+        "https://www.newsinlevels.com/products/athletes-and-ai-level-1/"
+        "https://www.newsinlevels.com/products/is-globalization-ending-level-1/"
+        "https://www.newsinlevels.com/products/battery-factory-fire-level-1/"
+        "https://www.newsinlevels.com/products/sick-chimps-eat-special-plants-level-1/"
     ]
 
-    print("English Trainging > Iniciando importação de noticias")
-    response = import_notices(notices)
-    print(response)
-    print("English Training > Importação realizada com sucesso.")
+    print("English Trainging > Starting import")
+    response = multithread_importer(notices)
+    end = timeit.default_timer()
+    print("English Training > Import completed successfully.")
+    print(f"Processed in {end - start} seconds")

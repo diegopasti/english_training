@@ -1,13 +1,13 @@
-import os
+import shutil
 
 
-def delete_files(files):
+def delete_directory(directory):
     """
     Remove temporary files used to import e merge track files
 
-    :param files: List of tracks
+    :param directory: directory that will be deleted
     :return: None
     """
 
-    for file in files:
-        os.remove(file)
+    shutil.rmtree(directory)
+
